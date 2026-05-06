@@ -1,0 +1,44 @@
+export const ORDER_STATUS = {
+  PENDING: "pending",
+  PAID: "paid",
+  PREPARING: "preparing",
+  SHIPPED: "shipped",
+  DELIVERED: "delivered",
+  CANCELLED: "cancelled",
+  REFUNDED: "refunded",
+};
+
+export const PAID_STATUSES = [
+  ORDER_STATUS.PAID,
+  ORDER_STATUS.PREPARING,
+  ORDER_STATUS.SHIPPED,
+  ORDER_STATUS.DELIVERED,
+];
+
+export const VALID_TRANSITIONS = {
+  [ORDER_STATUS.PENDING]: [ORDER_STATUS.PAID, ORDER_STATUS.CANCELLED],
+  [ORDER_STATUS.PAID]: [ORDER_STATUS.PREPARING, ORDER_STATUS.CANCELLED, ORDER_STATUS.REFUNDED],
+  [ORDER_STATUS.PREPARING]: [ORDER_STATUS.SHIPPED, ORDER_STATUS.CANCELLED],
+  [ORDER_STATUS.SHIPPED]: [ORDER_STATUS.DELIVERED],
+  [ORDER_STATUS.DELIVERED]: [ORDER_STATUS.REFUNDED],
+  [ORDER_STATUS.CANCELLED]: [],
+  [ORDER_STATUS.REFUNDED]: [],
+};
+
+export const PAYMENT_STATUS = {
+  PENDING: "pending",
+  PROCESSING: "processing",
+  PROCESSING_COMMIT: "processing_commit",
+  APPROVED: "approved",
+  REJECTED: "rejected",
+  REFUNDED: "refunded",
+};
+
+export const ROLES = {
+  CUSTOMER: "customer",
+  VENDOR: "vendor",
+  ADMIN: "admin",
+};
+
+export const BCRYPT_ROUNDS = 12;
+export const PASSWORD_MIN_LENGTH = 8;
