@@ -275,6 +275,7 @@ export const resetPassword = async (token, newPassword) => {
   }
 
   user.password_hash = await hashPassword(newPassword);
+  user.password_changed_at = new Date();
   user.reset_password_token_hash = null;
   user.reset_password_expires = null;
 
@@ -377,6 +378,7 @@ export const changePassword = async (userId, currentPassword, newPassword) => {
   if (!ok) throw new UnauthorizedError("Contraseña actual incorrecta");
 
   user.password_hash = await hashPassword(newPassword);
+  user.password_changed_at = new Date();
 
   // Revocar todos los refresh tokens
   if (Array.isArray(user.refresh_token_hashes)) {

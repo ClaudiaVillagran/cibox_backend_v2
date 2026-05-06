@@ -19,8 +19,20 @@ const SHIPPING_RATES = {
   atacama: { XS: 4850, S: 5900, M: 7700, L: 9900, XL: 13800 },
   coquimbo: { XS: 4600, S: 5300, M: 7000, L: 9600, XL: 12800 },
   valparaiso: { XS: 3900, S: 4500, M: 6000, L: 7700, XL: 9700 },
-  "metropolitana de santiago": { XS: 3100, S: 3650, M: 4700, L: 5700, XL: 7600 },
-  "libertador general bernardo o higgins": { XS: 4000, S: 4800, M: 6400, L: 8300, XL: 11300 },
+  "metropolitana de santiago": {
+    XS: 3100,
+    S: 3650,
+    M: 4700,
+    L: 5700,
+    XL: 7600,
+  },
+  "libertador general bernardo o higgins": {
+    XS: 4000,
+    S: 4800,
+    M: 6400,
+    L: 8300,
+    XL: 11300,
+  },
   maule: { XS: 4200, S: 5200, M: 6700, L: 8900, XL: 12100 },
   nuble: { XS: 4600, S: 5400, M: 7200, L: 9200, XL: 12600 },
   "bio-bio": { XS: 4700, S: 5700, M: 7300, L: 9500, XL: 12800 },
@@ -28,7 +40,13 @@ const SHIPPING_RATES = {
   "los rios": { XS: 5300, S: 6100, M: 8300, L: 10000, XL: 14200 },
   "los lagos": { XS: 5300, S: 6100, M: 8300, L: 10000, XL: 14200 },
   aysen: { XS: 8000, S: 9500, M: 14000, L: 21500, XL: 28500 },
-  "magallanes y la antartica chilena": { XS: 8000, S: 9500, M: 14000, L: 21500, XL: 28500 },
+  "magallanes y la antartica chilena": {
+    XS: 8000,
+    S: 9500,
+    M: 14000,
+    L: 21500,
+    XL: 28500,
+  },
 };
 
 const REGION_ALIASES = {
@@ -76,8 +94,11 @@ const toGrams = (weight = {}) => {
 
 export const getOrderTotalWeightGrams = (order) =>
   (order?.items || []).reduce((acc, item) => {
-    const weightSrc = item.weight ||
-      (item.product_id && typeof item.product_id === "object" ? item.product_id.weight : null) ||
+    const weightSrc =
+      item.weight ||
+      (item.product_id && typeof item.product_id === "object"
+        ? item.product_id.weight
+        : null) ||
       {};
     const unitWeight = toGrams(weightSrc);
     const quantity = Number(item.quantity || 0);
@@ -85,7 +106,7 @@ export const getOrderTotalWeightGrams = (order) =>
   }, 0);
 
 export const getWeightTier = (grams) => {
-  if (grams > 0 && grams <= 500) return "XS";
+  if (grams <= 500) return "XS"; // covers 0 and small items correctly
   if (grams <= 3000) return "S";
   if (grams <= 6000) return "M";
   if (grams <= 16000) return "L";
@@ -98,7 +119,9 @@ export const getWeightTier = (grams) => {
 export const quoteManualShippingForOrder = (order) => {
   const regionKey = resolveRegionKey(order?.shipping?.region);
   if (!regionKey) {
-    throw new BadRequestError("La región ingresada no tiene tarifa configurada");
+    throw new BadRequestError(
+      "La región ingresada no tiene tarifa configurada",
+    );
   }
 
   const totalWeight = getOrderTotalWeightGrams(order);
@@ -106,7 +129,7 @@ export const quoteManualShippingForOrder = (order) => {
 
   if (!tier) {
     throw new BadRequestError(
-      "El peso total supera el máximo permitido para tarifa manual"
+      "El peso total supera el máximo permitido para tarifa manual",
     );
   }
 
@@ -114,7 +137,9 @@ export const quoteManualShippingForOrder = (order) => {
   const amount = Number(regionRates?.[tier] || 0);
 
   if (!amount) {
-    throw new BadRequestError("No existe tarifa para esa región y rango de peso");
+    throw new BadRequestError(
+      "No existe tarifa para esa región y rango de peso",
+    );
   }
 
   return {
@@ -148,7 +173,8 @@ export const quoteManualShippingForOrder = (order) => {
  * Punto único de cotización. Por ahora redirige a manual.
  * Cuando BlueExpress API esté integrado, decidir aquí.
  */
-export const quoteShippingForOrder = (order) => quoteManualShippingForOrder(order);
+export const quoteShippingForOrder = (order) =>
+  quoteManualShippingForOrder(order);
 
 /* --------------------------- creación de envío --------------------------- */
 
@@ -164,7 +190,7 @@ export const createShipmentForPaidOrder = async (order) => {
     // Stub: dejar punto de extensión documentado para la integración real.
     logger.info(
       { orderId: String(order._id) },
-      "BlueExpress API configurada — integración real pendiente"
+      "BlueExpress API configurada — integración real pendiente",
     );
   }
 

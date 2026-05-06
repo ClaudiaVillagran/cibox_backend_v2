@@ -5,7 +5,8 @@ dotenv.config();
 
 const envSchema = z.object({
   UPLOAD_DRIVER: z.enum(["disk", "s3", "cloudinary"]).default("disk"),
-
+  PANTRY_DISCOUNT: z.coerce.number().min(0).max(100).default(10),
+  CIBOX_PLUS_DISCOUNT: z.coerce.number().min(0).max(100).default(15),
   CLOUDINARY_CLOUD_NAME: z.string().default(""),
   CLOUDINARY_API_KEY: z.string().default(""),
   CLOUDINARY_API_SECRET: z.string().default(""),

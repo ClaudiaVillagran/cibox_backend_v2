@@ -164,7 +164,8 @@ orderSchema.index({ "payment.token": 1 });
 orderSchema.index({ "payment.buy_order": 1 });
 orderSchema.index({ "items.product_id": 1 });
 orderSchema.index({ status: 1, created_at: -1 });
-
+orderSchema.index({ "items.vendor.id": 1, status: 1, created_at: -1 });
+orderSchema.index({ "payment.status": 1, created_at: -1 });
 export const Order =
   mongoose.models.Order || mongoose.model("Order", orderSchema);
 export default Order;

@@ -17,7 +17,6 @@ export const findFirstPurchaseAutoCoupon = async () => {
   });
 };
 
-
 /**
  * Valida un cupón para un usuario o invitado y un subtotal dado.
  * Retorna { valid, message?, discount_preview? }.
@@ -75,10 +74,14 @@ export const validateCouponForUser = async ({ coupon, userId, subtotal }) => {
         };
       }
     }
-  } else if (coupon.first_purchase_only === false) {
-    // guests permitidos solo si no es first_purchase_only
-  } else if (coupon.first_purchase_only === true) {
-    // permitir, no podemos verificar historial
+  } else {
+    // Sin userId = guest. Si el cupón es solo primera compra, bloquearlo.
+    if (coupon.first_purchase_only) {
+      return {
+        valid: false,
+        message: "Cupón válido solo para usuarios registrados",
+      };
+    }
   }
 
   const discountPreview = calculateCouponDiscount({ coupon, subtotal: sub });
@@ -145,11 +148,21 @@ export const applyCouponToOrder = async (
     throw err;
   }
 
-  await Coupon.updateOne(
-    { _id: coupon._id },
+  const updateResult = await Coupon.updateOne(
+    {
+      _id: coupon._id,
+      $or: [
+        { max_uses: null },
+        { $expr: { $lt: ["$used_count", "$max_uses"] } },
+      ],
+    },
     { $inc: { used_count: 1 } },
     { session },
   );
+
+  if (updateResult.modifiedCount === 0) {
+    throw new ConflictError("Cupón sin usos disponibles");
+  }
 
   return usage;
 };

@@ -1,8 +1,8 @@
 import { BadRequestError } from "../utils/errors.js";
+import { env } from "../config/env.js";
 
-const PANTRY_DISCOUNT_PERCENT = Number(process.env.PANTRY_DISCOUNT || 0);
-const CIBOX_PLUS_DISCOUNT_PERCENT = Number(process.env.CIBOX_PLUS_DISCOUNT || 0);
-
+const PANTRY_DISCOUNT_PERCENT = env.PANTRY_DISCOUNT;
+const CIBOX_PLUS_DISCOUNT_PERCENT = env.CIBOX_PLUS_DISCOUNT;
 export const getPriceTierByQuantity = (tiers, quantity) => {
   if (!Array.isArray(tiers) || tiers.length === 0) {
     throw new BadRequestError("El producto no tiene tiers de precio");
@@ -49,7 +49,12 @@ const buildDiscountResult = (price, discountPercent, source) => {
   };
 };
 
-export const applyBestDiscount = ({ price, product, user, fromPantry = false }) => {
+export const applyBestDiscount = ({
+  price,
+  product,
+  user,
+  fromPantry = false,
+}) => {
   if (fromPantry) {
     return buildDiscountResult(price, PANTRY_DISCOUNT_PERCENT, "pantry");
   }
@@ -61,7 +66,11 @@ export const applyBestDiscount = ({ price, product, user, fromPantry = false }) 
   const productAllowsCiboxPlus = product?.cibox_plus?.enabled === true;
 
   if (hasActiveSubscription && productAllowsCiboxPlus) {
-    return buildDiscountResult(price, CIBOX_PLUS_DISCOUNT_PERCENT, "cibox_plus");
+    return buildDiscountResult(
+      price,
+      CIBOX_PLUS_DISCOUNT_PERCENT,
+      "cibox_plus",
+    );
   }
 
   return buildDiscountResult(price, 0, null);

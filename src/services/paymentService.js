@@ -28,7 +28,6 @@ const buildSessionId = ({ userId, guestId, orderId }) => {
  */
 export const createWebpayTransaction = async ({ order, platform }) => {
   if (!order) throw new NotFoundError("Orden no encontrada");
-  console.log("order from create webpay", order);
   if (order.status !== ORDER_STATUS.PENDING) {
     throw new ConflictError(
       "Solo se puede pagar una orden en estado pendiente",
@@ -55,8 +54,8 @@ export const createWebpayTransaction = async ({ order, platform }) => {
   }
 
   const tx = getTransaction();
-  console.log("WEBPAY RETURN URL ENVIADA A TRANSBANK:", webpayReturnUrl);
-  console.log("WEBPAY PLATFORM RECIBIDA:", platform);
+  // console.log("WEBPAY RETURN URL ENVIADA A TRANSBANK:", webpayReturnUrl);
+  // console.log("WEBPAY PLATFORM RECIBIDA:", platform);
   const response = await tx.create(
     buyOrder,
     sessionId,
@@ -102,33 +101,21 @@ export const createWebpayTransaction = async ({ order, platform }) => {
 export const commitWebpayTransaction = async ({ token }) => {
   if (!token) throw new BadRequestError("Token requerido");
 
-  // Lock optimista: tomar la orden solo si está en estado pre-commit.
-  const lockable = [
-    "processing",
-    PAYMENT_STATUS.PENDING,
-    PAYMENT_STATUS.PROCESSING,
-  ];
+  const locked = await Order.findOneAndUpdate(
+    {
+      "payment.token": token,
+      "payment.status": { $in: ["pending", "processing"] },
+    },
+    { $set: { "payment.status": "processing_commit" } },
+    { new: true },
+  );
 
-  const current = await Order.findOne({ "payment.token": token });
-
-  if (!current) {
-    throw new NotFoundError("Orden no encontrada para el token");
+  if (!locked) {
+    const existing = await Order.findOne({ "payment.token": token });
+    if (!existing) throw new NotFoundError("Orden no encontrada para el token");
+    logger.info({ orderId: String(existing._id) }, "commit: idempotente");
+    return existing;
   }
-
-  if (!lockable.includes(current.payment?.status)) {
-    logger.info(
-      {
-        orderId: String(current._id),
-        paymentStatus: current.payment?.status,
-        orderStatus: current.status,
-      },
-      "commitWebpayTransaction: idempotente — ya procesada",
-    );
-    return current;
-  }
-
-  current.payment.status = PAYMENT_STATUS.PROCESSING;
-  const locked = await current.save();
 
   // if (!locked) {
   //   // No pudo bloquear: ya fue confirmada o cancelada.
@@ -274,7 +261,6 @@ export const retryPayment = async ({ order, platform }) => {
   }
 
   // Resetea token y crea uno nuevo
-  order.payment.token = null;
   order.payment.authorization_code = null;
   order.payment.response_code = null;
   order.payment.status = PAYMENT_STATUS.PENDING;

@@ -21,10 +21,19 @@ export const protect = async (req, res, next) => {
       throw new UnauthorizedError("Token inválido o expirado");
     }
 
-    const user = await User.findById(decoded.id).select("_id email role is_active email_verified").lean();
+    const user = await User.findById(decoded.id)
+      .select("_id email role is_active email_verified password_changed_at")
+      .lean();
     if (!user) throw new UnauthorizedError("Usuario no encontrado");
-    if (user.is_active === false) throw new ForbiddenError("Usuario desactivado");
+    if (user.is_active === false)
+      throw new ForbiddenError("Usuario desactivado");
 
+    if (user.password_changed_at) {
+      const tokenIssuedAt = decoded.iat * 1000; // JWT iat is in seconds
+      if (tokenIssuedAt < user.password_changed_at.getTime()) {
+        throw new UnauthorizedError("Sesión expirada, vuelve a iniciar sesión");
+      }
+    }
     req.user = {
       id: String(user._id),
       email: user.email,
@@ -44,7 +53,9 @@ export const optionalAuth = async (req, res, next) => {
 
     try {
       const decoded = jwt.verify(token, env.JWT_SECRET);
-      const user = await User.findById(decoded.id).select("_id email role is_active email_verified").lean();
+      const user = await User.findById(decoded.id)
+        .select("_id email role is_active email_verified")
+        .lean();
       if (user && user.is_active !== false) {
         req.user = {
           id: String(user._id),

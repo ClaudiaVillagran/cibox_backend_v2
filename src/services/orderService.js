@@ -25,7 +25,6 @@ import { calculateItemPricing } from "./pricingService.js";
 import {
   decrementStockAtomic,
   restoreStock,
-  checkStockAvailability,
 } from "./stockService.js";
 import {
   validateCouponForUser,
@@ -157,7 +156,7 @@ const rebuildItemsFromCart = async ({ cart, user, session }) => {
     });
 
     // Verificar stock disponible (sin descontar)
-    await checkStockAvailability(
+    await decrementStockAtomic(
       { productId: product._id, quantity: pricing.quantity },
       session,
     );
@@ -223,7 +222,7 @@ const rebuildItemsFromCustomBox = async ({ rawItems, user, session }) => {
       user,
     });
 
-    await checkStockAvailability(
+    await decrementStockAtomic(
       { productId: product._id, quantity: pricing.quantity },
       session,
     );
@@ -581,24 +580,18 @@ export const finalizePaidOrder = async (orderId) => {
 
     if (!order) throw new NotFoundError("Orden no encontrada");
 
-    if (order.payment?.webhook_processed_at) {
-      logger.info(
+    if (
+      order.payment?.webhook_processed_at ||
+      PAID_STATUSES.includes(order.status)
+    ) {
+      logger.warn(
         { orderId: String(order._id) },
-        "finalizePaidOrder: ya procesado (idempotente)",
+        "finalizePaidOrder: ya procesado",
       );
       return order;
     }
 
-    // Descontar stock por cada item
-    for (const item of order.items) {
-      if (!item.product_id) continue;
-      await decrementStockAtomic(
-        { productId: item.product_id, quantity: item.quantity },
-        session,
-      );
-    }
-
-    // Aplicar cupón si lo había (idempotente vía índice único)
+    // Aplicar cupón si lo había
     if (order.coupon?.coupon_id && Number(order.coupon?.discount_amount) > 0) {
       const couponDoc = await Coupon.findById(order.coupon.coupon_id).session(
         session,
@@ -628,10 +621,10 @@ export const finalizePaidOrder = async (orderId) => {
       { orderId: String(order._id), total: order.total },
       "orden finalizada como pagada",
     );
+
     return order;
   });
 };
-
 /**
  * Cancela una orden: si estaba paid, repone stock y revierte cupón.
  */

@@ -11,7 +11,7 @@ const refreshTokenHashSchema = new mongoose.Schema(
     device: { type: String, default: null },
     revoked: { type: Boolean, default: false },
   },
-  { _id: false }
+  { _id: false },
 );
 
 const userSchema = new mongoose.Schema(
@@ -60,6 +60,7 @@ const userSchema = new mongoose.Schema(
 
     reset_password_token_hash: { type: String, default: null, index: true },
     reset_password_expires: { type: Date, default: null },
+    password_changed_at: { type: Date, default: null },
 
     refresh_token_hashes: {
       type: [refreshTokenHashSchema],
@@ -96,7 +97,7 @@ const userSchema = new mongoose.Schema(
         return ret;
       },
     },
-  }
+  },
 );
 
 userSchema.methods.comparePassword = function (plain) {
