@@ -1,6 +1,6 @@
 import { Router } from "express";
 
-import { protect } from "../middlewares/authMiddleware.js";
+import { protect, optionalAuth  } from "../middlewares/authMiddleware.js";
 import { requireAdmin } from "../middlewares/roleMiddleware.js";
 import { validate } from "../middlewares/validate.js";
 
