@@ -57,7 +57,10 @@ const sendPaymentApprovedEmail = async (order, taxDocument = null) => {
       html: template.html,
     });
   } catch (err) {
-    logger.warn({ err: err.message }, "no se pudo enviar email de pago aprobado");
+    logger.warn(
+      { err: err.message },
+      "no se pudo enviar email de pago aprobado",
+    );
   }
 };
 
@@ -140,11 +143,17 @@ const sendInternalOrderNotificationEmail = async (order) => {
     const shortOrder = orderId.slice(-8);
 
     const itemsText = (order.items || [])
-      .map((item) => `- ${item.name} x${item.quantity} | Subtotal: ${money(item.subtotal)}`)
+      .map(
+        (item) =>
+          `- ${item.name} x${item.quantity} | Subtotal: ${money(item.subtotal)}`,
+      )
       .join("\n");
 
     const itemsHtml = (order.items || [])
-      .map((item) => `<li>${item.name} x${item.quantity} — ${money(item.subtotal)}</li>`)
+      .map(
+        (item) =>
+          `<li>${item.name} x${item.quantity} — ${money(item.subtotal)}</li>`,
+      )
       .join("");
 
     await sendEmail({
@@ -267,7 +276,7 @@ export const handleWebpayReturn = asyncHandler(async (req, res) => {
 
   if (!token_ws && !TBK_TOKEN) {
     return res.redirect(
-      `${env.MOBILE_DEEP_LINK.replace(/\/$/, "")}/orders/failed?status=error`,
+      `${env.FRONTEND_URL.replace(/\/$/, "")}/orders/failed?status=error`,
     );
   }
 
@@ -312,9 +321,8 @@ export const handleWebpayReturn = asyncHandler(async (req, res) => {
     );
   } catch (err) {
     logger.error({ err: err.message }, "WEBPAY_RETURN handler error");
-
     return res.redirect(
-      `${env.MOBILE_DEEP_LINK.replace(/\/$/, "")}/orders/failed?status=error`,
+      `${env.FRONTEND_URL.replace(/\/$/, "")}/orders/failed?status=error`,
     );
   }
 });
