@@ -101,14 +101,22 @@ export const createWebpayTransaction = async ({ order, platform }) => {
 export const commitWebpayTransaction = async ({ token }) => {
   if (!token) throw new BadRequestError("Token requerido");
 
-  const locked = await Order.findOneAndUpdate(
+  const locked = await Order.collection.findOneAndUpdate(
     {
       "payment.token": token,
       "payment.status": { $in: ["pending", "processing"] },
     },
     { $set: { "payment.status": "processing_commit" } },
-    { new: true },
+    { returnDocument: "after" },
   );
+
+  const lockedDoc = locked?.value || locked;
+  if (!lockedDoc) {
+    const existing = await Order.findOne({ "payment.token": token });
+    if (!existing) throw new NotFoundError("Orden no encontrada para el token");
+    logger.info({ orderId: String(existing._id) }, "commit: idempotente");
+    return existing;
+  }
 
   if (!locked) {
     const existing = await Order.findOne({ "payment.token": token });
