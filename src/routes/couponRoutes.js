@@ -30,7 +30,7 @@ router.post(
   validate(validateCouponSchema),
   validateCoupon,
 );
-router.post("/checkout-preview", protect, checkoutCouponPreview);
+router.post("/checkout-preview", optionalAuth, checkoutCouponPreview);
 // Admin
 router.post(
   "/admin",
