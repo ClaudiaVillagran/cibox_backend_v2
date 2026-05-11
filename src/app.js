@@ -35,7 +35,7 @@ import taxDocumentRoutes from "./routes/taxDocumentRoutes.js";
 import seedProducts from "./seed/seedProducts.js";
 
 const app = express();
-
+console.log('prueba');
 app.set("trust proxy", 1);
 app.set("query parser", "simple");
 
