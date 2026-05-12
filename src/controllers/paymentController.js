@@ -16,6 +16,7 @@ import { findOrderForOwner } from "../services/orderService.js";
 import { createShipmentForPaidOrder } from "../services/shippingService.js";
 import { ORDER_STATUS, PAYMENT_STATUS } from "../utils/constants.js";
 import { buildPaymentApprovedTemplate } from "../utils/emailTemplates.js";
+import mongoose from "mongoose";
 
 const sanitizeOrder = (order) =>
   order && typeof order.toJSON === "function" ? order.toJSON() : order;
@@ -95,15 +96,16 @@ const emitTaxDocumentForPaidOrder = async (order) => {
 const getVendorEmailsFromOrder = async (order) => {
   const productIds = (order.items || [])
     .map((item) => item.product_id)
-    .filter(Boolean);
+    .filter(Boolean)
+    .map((id) => new mongoose.Types.ObjectId(String(id)));
 
   if (!productIds.length) return [];
 
-  const products = await Product.find({
-    _id: { $in: productIds },
-  })
-    .select("vendor")
-    .lean();
+  // Usar collection directamente para evitar sanitizeFilter
+  const products = await Product.collection
+    .find({ _id: { $in: productIds } })
+    .project({ vendor: 1 })
+    .toArray();
 
   const vendorIds = [
     ...new Set(products.map((p) => p.vendor?.id).filter(Boolean)),
@@ -111,9 +113,9 @@ const getVendorEmailsFromOrder = async (order) => {
 
   if (!vendorIds.length) return [];
 
-  const vendors = await Vendor.find({
-    _id: { $in: vendorIds },
-  }).lean();
+  const vendors = await Vendor.collection
+    .find({ _id: { $in: vendorIds.map((id) => new mongoose.Types.ObjectId(String(id))) } })
+    .toArray();
 
   const emails = [];
 

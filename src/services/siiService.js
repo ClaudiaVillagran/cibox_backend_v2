@@ -3,7 +3,7 @@ import { env } from "../config/env.js";
 import { logger } from "../utils/logger.js";
 import { TaxDocument } from "../models/TaxDocument.js";
 import { BadRequestError, NotFoundError } from "../utils/errors.js";
-
+import mongoose from "mongoose";
 const computeIvaBreakdown = (total) => {
   const t = Number(total || 0);
   const neto = Math.round(t / 1.19);
@@ -25,11 +25,11 @@ export const emitDocumentForOrder = async (order, type = "boleta") => {
     throw new BadRequestError(`Tipo de documento inválido: ${type}`);
 
   // Idempotencia: si ya existe documento aceptado para esta orden y tipo, retornarlo
-  const existing = await TaxDocument.findOne({
-    order_id: order._id,
+  const existing = await TaxDocument.collection.findOne({
+    order_id: new mongoose.Types.ObjectId(String(order._id)),
     type,
     status: { $in: ["pending", "accepted"] },
-  }).lean();
+  });
   if (existing) return existing;
 
   const total = Number(order.total || 0);
