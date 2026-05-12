@@ -80,19 +80,13 @@ export const buildPaymentApprovedTemplate = ({ order, taxDocument = null }) => {
   const shipping = order.shipping || {};
   const payment = order.payment || {};
   const items = Array.isArray(order.items) ? order.items : [];
+  const isCustomBox = order.source === "custom_box";
 
   const orderId = String(order._id || order.id || "");
   const shortOrder = orderId.slice(-8);
 
   const taxText = taxDocument
-    ? `
-
-Documento tributario:
-Tipo: ${taxDocument.type || "boleta"}
-Folio: ${taxDocument.folio || "—"}
-Estado: ${taxDocument.status || "—"}
-${taxDocument.stub ? "Modo integración: documento de prueba, no válido tributariamente." : ""}
-`
+    ? `\nDocumento tributario:\nTipo: ${taxDocument.type || "boleta"}\nFolio: ${taxDocument.folio || "—"}\nEstado: ${taxDocument.status || "—"}\n${taxDocument.stub ? "Modo integración: documento de prueba, no válido tributariamente." : ""}`
     : "";
 
   const taxHtml = taxDocument
@@ -101,20 +95,28 @@ ${taxDocument.stub ? "Modo integración: documento de prueba, no válido tributa
       <p><strong>Tipo:</strong> ${escapeHtml(taxDocument.type || "boleta")}</p>
       <p><strong>Folio:</strong> ${escapeHtml(taxDocument.folio || "—")}</p>
       <p><strong>Estado:</strong> ${escapeHtml(taxDocument.status || "—")}</p>
-      ${
-        taxDocument.stub
-          ? `<p style="color:#92400e;"><strong>Modo integración:</strong> documento de prueba, no válido tributariamente.</p>`
-          : ""
-      }
+      ${taxDocument.stub ? `<p style="color:#92400e;"><strong>Modo integración:</strong> documento de prueba, no válido tributariamente.</p>` : ""}
     `
     : "";
 
+  const sourceLabel = isCustomBox
+    ? `<p style="background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:10px 14px;color:#166534;font-weight:700;margin-bottom:16px;">📦 Caja personalizada — los productos fueron elegidos por ti</p>`
+    : "";
+
+  const sourceLabelText = isCustomBox
+    ? "📦 Caja personalizada — los productos fueron elegidos por ti\n\n"
+    : "";
+
   const productsHtml = items
-    .map(
-      (item) => `
+    .map((item) => {
+      const isBox = item.product_type === "box";
+      const label = isBox
+        ? `<span style="font-size:11px;background:#fef9c3;color:#854d0e;border-radius:4px;padding:2px 6px;margin-left:6px;font-weight:700;">Caja</span>`
+        : "";
+      return `
         <tr>
           <td style="padding:8px;border-bottom:1px solid #eee;">
-            ${escapeHtml(item.name || "Producto")}
+            ${escapeHtml(item.name || "Producto")}${label}
           </td>
           <td style="padding:8px;border-bottom:1px solid #eee;text-align:center;">
             ${escapeHtml(item.quantity)}
@@ -126,15 +128,16 @@ ${taxDocument.stub ? "Modo integración: documento de prueba, no válido tributa
             ${escapeHtml(money(item.subtotal))}
           </td>
         </tr>
-      `,
-    )
+      `;
+    })
     .join("");
 
   const productsText = items
-    .map(
-      (item) =>
-        `- ${item.name} x${item.quantity} | ${money(item.price)} | Subtotal: ${money(item.subtotal)}`,
-    )
+    .map((item) => {
+      const isBox = item.product_type === "box";
+      const label = isBox ? " [Caja]" : "";
+      return `- ${item.name}${label} x${item.quantity} | ${money(item.price)} | Subtotal: ${money(item.subtotal)}`;
+    })
     .join("\n");
 
   return {
@@ -146,13 +149,14 @@ Tu pago fue confirmado correctamente.
 
 Orden: ${orderId}
 Fecha: ${formatDate(order.updated_at || order.created_at)}
+${isCustomBox ? "Tipo: Caja personalizada\n" : ""}
 Cliente: ${customer.fullName || "—"}
 RUT: ${customer.rut || "—"}
 Email: ${customer.email || "—"}
 Teléfono: ${customer.phone || "—"}
 
 Productos:
-${productsText}
+${sourceLabelText}${productsText}
 
 Subtotal: ${money(order.subtotal)}
 Envío: ${money(order.shipping_amount)}
@@ -186,6 +190,7 @@ Gracias por comprar en CIBOX.
       <p><strong>Teléfono:</strong> ${escapeHtml(customer.phone || "—")}</p>
 
       <h3>Productos</h3>
+      ${sourceLabel}
       <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
         <thead>
           <tr>

@@ -136,3 +136,46 @@ export const applyShippingToOrder = asyncHandler(async (req, res) => {
     },
   });
 });
+
+/**
+ * Cotiza envío a partir de una lista de items directa (sin carrito).
+ * Usado por CustomBox checkout.
+ */
+export const previewShippingFromItems = asyncHandler(async (req, res) => {
+  const { shipping, items } = req.body;
+
+  if (!Array.isArray(items) || items.length === 0) {
+    throw new BadRequestError("Se requieren items para cotizar el envío");
+  }
+
+  if (!shipping?.region) {
+    throw new BadRequestError("Se requiere la región para cotizar el envío");
+  }
+
+  const productIds = [...new Set(items.map((i) => String(i.product_id)))];
+  const products = await Promise.all(
+    productIds.map((id) =>
+      Product.findById(id).select("weight dimensions").lean()
+    )
+  );
+
+  const weightMap = new Map(
+    products.filter(Boolean).map((p) => [
+      String(p._id),
+      p.weight || { value: 0, unit: "g" },
+    ])
+  );
+
+  const orderLike = {
+    items: items.map((it) => ({
+      product_id: it.product_id,
+      quantity: it.quantity,
+      weight: weightMap.get(String(it.product_id)) || { value: 0, unit: "g" },
+    })),
+    shipping,
+  };
+
+  const quote = quoteShippingForOrder(orderLike);
+
+  return res.status(200).json({ success: true, data: quote });
+});

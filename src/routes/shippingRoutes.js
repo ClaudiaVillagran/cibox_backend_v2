@@ -7,6 +7,7 @@ import {
   previewShipping,
   quoteShipping,
   applyShippingToOrder,
+  previewShippingFromItems
 } from "../controllers/shippingController.js";
 
 import {
@@ -24,6 +25,9 @@ router.post(
   validate(previewShippingSchema),
   previewShipping
 );
+
+router.post("/preview-items", optionalAuth, previewShippingFromItems); // ← nuevo
+
 
 // Cotización para una orden existente (ownership requerido)
 router.post(
