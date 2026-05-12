@@ -143,29 +143,42 @@ const sendInternalOrderNotificationEmail = async (order) => {
 
     const orderId = String(order._id || order.id || "");
     const shortOrder = orderId.slice(-8);
+    const isCustomBox = order.source === "custom_box";
+
+    const sourceText = isCustomBox
+      ? "Tipo: Caja personalizada\n"
+      : "";
+
+    const sourceHtml = isCustomBox
+      ? `<p style="background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:10px 14px;color:#166534;font-weight:700;margin-bottom:16px;">📦 Caja personalizada — los productos fueron elegidos por el cliente</p>`
+      : "";
 
     const itemsText = (order.items || [])
-      .map(
-        (item) =>
-          `- ${item.name} x${item.quantity} | Subtotal: ${money(item.subtotal)}`,
-      )
+      .map((item) => {
+        const isBox = item.product_type === "box";
+        const label = isBox ? " [Caja]" : "";
+        return `- ${item.name}${label} x${item.quantity} | Subtotal: ${money(item.subtotal)}`;
+      })
       .join("\n");
 
     const itemsHtml = (order.items || [])
-      .map(
-        (item) =>
-          `<li>${item.name} x${item.quantity} — ${money(item.subtotal)}</li>`,
-      )
+      .map((item) => {
+        const isBox = item.product_type === "box";
+        const label = isBox
+          ? `<span style="font-size:11px;background:#fef9c3;color:#854d0e;border-radius:4px;padding:2px 6px;margin-left:6px;font-weight:700;">Caja</span>`
+          : "";
+        return `<li>${item.name}${label} x${item.quantity} — ${money(item.subtotal)}</li>`;
+      })
       .join("");
 
     await sendEmail({
       to: recipients.join(","),
-      subject: `Nueva compra pagada #${shortOrder}`,
+      subject: `Nueva compra pagada #${shortOrder}${isCustomBox ? " — Caja personalizada" : ""}`,
       text: `
 Nueva compra confirmada en CIBOX.
 
 Orden: ${orderId}
-Cliente: ${order.customer?.fullName || "—"}
+${sourceText}Cliente: ${order.customer?.fullName || "—"}
 Email: ${order.customer?.email || "—"}
 Teléfono: ${order.customer?.phone || "—"}
 RUT: ${order.customer?.rut || "—"}
@@ -179,13 +192,12 @@ Descuento: ${money(order.discount_amount)}
 Total pagado: ${money(order.total)}
 
 Dirección:
-${order.shipping?.address || "—"}, ${order.shipping?.city || "—"}, ${
-        order.shipping?.region || "—"
-      }
+${order.shipping?.address || "—"}, ${order.shipping?.city || "—"}, ${order.shipping?.region || "—"}
       `.trim(),
       html: `
         <h2>Nueva compra pagada en CIBOX</h2>
         <p><strong>Orden:</strong> ${orderId}</p>
+        ${sourceHtml}
 
         <h3>Cliente</h3>
         <p><strong>Nombre:</strong> ${order.customer?.fullName || "—"}</p>
@@ -203,9 +215,7 @@ ${order.shipping?.address || "—"}, ${order.shipping?.city || "—"}, ${
         <p><strong>Total pagado:</strong> ${money(order.total)}</p>
 
         <h3>Dirección</h3>
-        <p>${order.shipping?.address || "—"}, ${order.shipping?.city || "—"}, ${
-          order.shipping?.region || "—"
-        }</p>
+        <p>${order.shipping?.address || "—"}, ${order.shipping?.city || "—"}, ${order.shipping?.region || "—"}</p>
       `,
     });
   } catch (err) {
