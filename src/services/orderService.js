@@ -22,10 +22,7 @@ import {
 import { formatRut, isValidRut } from "../utils/rut.js";
 
 import { calculateItemPricing } from "./pricingService.js";
-import {
-  decrementStockAtomic,
-  restoreStock,
-} from "./stockService.js";
+import { decrementStockAtomic, restoreStock } from "./stockService.js";
 import {
   validateCouponForUser,
   calculateCouponDiscount,
@@ -126,16 +123,31 @@ const rebuildItemsFromCart = async ({ cart, user, session }) => {
   const productsRaw = await Promise.all(
     productIds.map((id) =>
       Product.findById(id)
-        .populate({
-          path: "box_items.product_id",
-          select: "name pricing brand",
-        })
         .session(session || null)
         .lean(),
     ),
   );
 
   const products = productsRaw.filter(Boolean);
+
+  // Cargar productos hijos de las cajas por separado
+  const boxProductIds = products
+    .filter((p) => p.product_type === "box")
+    .flatMap((p) => (p.box_items || []).map((bi) => String(bi.product_id)))
+    .filter(Boolean);
+
+  const childProductsRaw = boxProductIds.length
+    ? await Promise.all(
+        [...new Set(boxProductIds)].map((id) =>
+          Product.findById(id).select("name pricing brand").lean()
+        )
+      )
+    : [];
+
+  const childMap = new Map(
+    childProductsRaw.filter(Boolean).map((p) => [String(p._id), p])
+  );
+
   const map = new Map(products.map((p) => [String(p._id), p]));
 
   const rebuiltItems = [];
@@ -162,10 +174,10 @@ const rebuildItemsFromCart = async ({ cart, user, session }) => {
     const isBox = product.product_type === "box";
     const boxItemsData = isBox && Array.isArray(product.box_items)
       ? product.box_items.map((bi) => {
-          const child = bi.product_id;
+          const child = childMap.get(String(bi.product_id));
           const childPrice = child?.pricing?.tiers?.[0]?.price || 0;
           return {
-            product_id: child?._id || bi.product_id,
+            product_id: bi.product_id,
             name: child?.name || "Producto",
             quantity: bi.quantity,
             unit_price: childPrice,
@@ -198,7 +210,6 @@ const rebuildItemsFromCart = async ({ cart, user, session }) => {
 
   return { items: rebuiltItems, subtotal, productsMap: map };
 };
-
 const rebuildItemsFromCustomBox = async ({ rawItems, user, session }) => {
   if (!Array.isArray(rawItems) || rawItems.length === 0) {
     throw new BadRequestError("La caja personalizada está vacía");
