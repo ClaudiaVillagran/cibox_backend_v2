@@ -113,22 +113,54 @@ export const buildPaymentApprovedTemplate = ({ order, taxDocument = null }) => {
       const label = isBox
         ? `<span style="font-size:11px;background:#fef9c3;color:#854d0e;border-radius:4px;padding:2px 6px;margin-left:6px;font-weight:700;">Caja</span>`
         : "";
+
+      const boxContentsHtml =
+        isBox && Array.isArray(item.box_items) && item.box_items.length
+          ? `<tr>
+            <td colspan="4" style="padding:0 8px 12px 24px;">
+              <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;background:#fafff7;border-radius:8px;border:1px solid #e2f0d9;">
+                <thead>
+                  <tr>
+                    <th align="left" style="padding:6px 10px;font-size:11px;color:#666;font-weight:700;border-bottom:1px solid #e2f0d9;">Contenido de la caja</th>
+                    <th align="center" style="padding:6px 10px;font-size:11px;color:#666;font-weight:700;border-bottom:1px solid #e2f0d9;">Cant.</th>
+                    <th align="right" style="padding:6px 10px;font-size:11px;color:#666;font-weight:700;border-bottom:1px solid #e2f0d9;">P. Ref.</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${item.box_items
+                    .map(
+                      (bi) => `
+                    <tr>
+                      <td style="padding:5px 10px;font-size:12px;color:#333;">${escapeHtml(bi.name)}</td>
+                      <td style="padding:5px 10px;font-size:12px;color:#333;text-align:center;">${escapeHtml(bi.quantity)}</td>
+                      <td style="padding:5px 10px;font-size:12px;color:#333;text-align:right;">${escapeHtml(money(bi.unit_price))}</td>
+                    </tr>
+                  `,
+                    )
+                    .join("")}
+                </tbody>
+              </table>
+            </td>
+           </tr>`
+          : "";
+
       return `
-        <tr>
-          <td style="padding:8px;border-bottom:1px solid #eee;">
-            ${escapeHtml(item.name || "Producto")}${label}
-          </td>
-          <td style="padding:8px;border-bottom:1px solid #eee;text-align:center;">
-            ${escapeHtml(item.quantity)}
-          </td>
-          <td style="padding:8px;border-bottom:1px solid #eee;text-align:right;">
-            ${escapeHtml(money(item.price))}
-          </td>
-          <td style="padding:8px;border-bottom:1px solid #eee;text-align:right;">
-            ${escapeHtml(money(item.subtotal))}
-          </td>
-        </tr>
-      `;
+      <tr>
+        <td style="padding:8px;border-bottom:1px solid #eee;">
+          ${escapeHtml(item.name || "Producto")}${label}
+        </td>
+        <td style="padding:8px;border-bottom:1px solid #eee;text-align:center;">
+          ${escapeHtml(item.quantity)}
+        </td>
+        <td style="padding:8px;border-bottom:1px solid #eee;text-align:right;">
+          ${escapeHtml(money(item.price))}
+        </td>
+        <td style="padding:8px;border-bottom:1px solid #eee;text-align:right;">
+          ${escapeHtml(money(item.subtotal))}
+        </td>
+      </tr>
+      ${boxContentsHtml}
+    `;
     })
     .join("");
 
@@ -136,10 +168,19 @@ export const buildPaymentApprovedTemplate = ({ order, taxDocument = null }) => {
     .map((item) => {
       const isBox = item.product_type === "box";
       const label = isBox ? " [Caja]" : "";
-      return `- ${item.name}${label} x${item.quantity} | ${money(item.price)} | Subtotal: ${money(item.subtotal)}`;
+      const boxContentsText =
+        isBox && Array.isArray(item.box_items) && item.box_items.length
+          ? "\n" +
+            item.box_items
+              .map(
+                (bi) =>
+                  `    · ${bi.quantity}x ${bi.name} — ${money(bi.unit_price)}`,
+              )
+              .join("\n")
+          : "";
+      return `- ${item.name}${label} x${item.quantity} | ${money(item.price)} | Subtotal: ${money(item.subtotal)}${boxContentsText}`;
     })
     .join("\n");
-
   return {
     subject: `Pago confirmado #${shortOrder}`,
     text: `

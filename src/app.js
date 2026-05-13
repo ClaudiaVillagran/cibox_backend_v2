@@ -2,6 +2,7 @@ import express from "express";
 import cors from "cors";
 import helmet from "helmet";
 import compression from "compression";
+import deleteProducts from "./seed/deleteProducts.js";
 
 import { env } from "./config/env.js";
 import { logger } from "./utils/logger.js";
@@ -33,6 +34,7 @@ import trackingRoutes from "./routes/trackingRoutes.js";
 import guestRoutes from "./routes/guestRoutes.js";
 import taxDocumentRoutes from "./routes/taxDocumentRoutes.js";
 import seedProducts from "./seed/seedProducts.js";
+import deleteEmptyCategories from "./seed/deleteEmptyCategories .js";
 
 const app = express();
 console.log('prueba');
@@ -101,4 +103,6 @@ app.get("/failed", (req, res) => {
 app.use(notFoundHandler);
 app.use(errorHandler);
 // seedProducts()
+//  deleteProducts();
+// deleteEmptyCategories()
 export default app;

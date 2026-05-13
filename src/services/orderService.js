@@ -126,13 +126,16 @@ const rebuildItemsFromCart = async ({ cart, user, session }) => {
   const productsRaw = await Promise.all(
     productIds.map((id) =>
       Product.findById(id)
+        .populate({
+          path: "box_items.product_id",
+          select: "name pricing brand",
+        })
         .session(session || null)
         .lean(),
     ),
   );
 
   const products = productsRaw.filter(Boolean);
-
   const map = new Map(products.map((p) => [String(p._id), p]));
 
   const rebuiltItems = [];
@@ -140,12 +143,8 @@ const rebuildItemsFromCart = async ({ cart, user, session }) => {
 
   for (const cartItem of cart.items) {
     const product = map.get(String(cartItem.product_id));
-    if (!product) {
-      throw new ConflictError(`Producto no encontrado: ${cartItem.name}`);
-    }
-    if (!product.is_active) {
-      throw new ConflictError(`Producto inactivo: ${product.name}`);
-    }
+    if (!product) throw new ConflictError(`Producto no encontrado: ${cartItem.name}`);
+    if (!product.is_active) throw new ConflictError(`Producto inactivo: ${product.name}`);
 
     const tiers = product?.pricing?.tiers || [];
     const pricing = calculateItemPricing({
@@ -155,11 +154,25 @@ const rebuildItemsFromCart = async ({ cart, user, session }) => {
       user,
     });
 
-    // Verificar stock disponible (sin descontar)
     await decrementStockAtomic(
       { productId: product._id, quantity: pricing.quantity },
       session,
     );
+
+    const isBox = product.product_type === "box";
+    const boxItemsData = isBox && Array.isArray(product.box_items)
+      ? product.box_items.map((bi) => {
+          const child = bi.product_id;
+          const childPrice = child?.pricing?.tiers?.[0]?.price || 0;
+          return {
+            product_id: child?._id || bi.product_id,
+            name: child?.name || "Producto",
+            quantity: bi.quantity,
+            unit_price: childPrice,
+            subtotal: childPrice * bi.quantity,
+          };
+        })
+      : [];
 
     rebuiltItems.push({
       product_id: product._id,
@@ -174,13 +187,10 @@ const rebuildItemsFromCart = async ({ cart, user, session }) => {
       discount_source: pricing.discount_source,
       subtotal: pricing.subtotal,
       original_subtotal: pricing.original_subtotal,
+      product_type: isBox ? "box" : "simple",
+      box_items: boxItemsData,
       weight: product.weight || { value: 0, unit: "g" },
-      dimensions: product.dimensions || {
-        length: 0,
-        width: 0,
-        height: 0,
-        unit: "cm",
-      },
+      dimensions: product.dimensions || { length: 0, width: 0, height: 0, unit: "cm" },
     });
 
     subtotal += pricing.subtotal;
