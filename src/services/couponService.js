@@ -148,7 +148,7 @@ export const applyCouponToOrder = async (
     throw err;
   }
 
-  const updateResult = await Coupon.updateOne(
+  const updateResult = await Coupon.collection.updateOne(
     {
       _id: coupon._id,
       $or: [
