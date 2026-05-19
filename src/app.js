@@ -35,6 +35,7 @@ import guestRoutes from "./routes/guestRoutes.js";
 import taxDocumentRoutes from "./routes/taxDocumentRoutes.js";
 import seedProducts from "./seed/seedProducts.js";
 import deleteEmptyCategories from "./seed/deleteEmptyCategories .js";
+import missionRoutes from "./routes/missionRoutes.js";
 
 const app = express();
 console.log('prueba');
@@ -85,6 +86,7 @@ app.use("/api/addresses", addressRoutes);
 app.use("/api/tracking", trackingRoutes);
 app.use("/api/guest", guestRoutes);
 app.use("/api/tax-documents", taxDocumentRoutes);
+app.use("/api/missions", missionRoutes);
 
 app.get("/success", (req, res) => {
   const orderId = String(req.query.orderId || "");
