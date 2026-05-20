@@ -9,6 +9,11 @@ const couponSchema = new mongoose.Schema(
       uppercase: true,
       trim: true,
     },
+    allowed_user_id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
     discount_type: {
       type: String,
       enum: ["percent", "fixed"],
@@ -63,7 +68,7 @@ const couponSchema = new mongoose.Schema(
   },
   {
     timestamps: { createdAt: "created_at", updatedAt: "updated_at" },
-  }
+  },
 );
 
 couponSchema.index({ is_active: 1, expires_at: 1 });

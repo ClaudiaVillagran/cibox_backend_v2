@@ -137,6 +137,7 @@ export const claimReward = asyncHandler(async (req, res) => {
     max_uses_per_user: 1,
     expires_at: expiresAt,
     is_active: true,
+      allowed_user_id: userId,
   });
 
   um.reward_claimed = true;

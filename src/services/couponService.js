@@ -28,6 +28,16 @@ export const validateCouponForUser = async ({ coupon, userId, subtotal }) => {
 
   if (!coupon.is_active) return { valid: false, message: "Cupón inactivo" };
 
+  // Cupón restringido a un usuario específico (ej: recompensa de misión)
+  if (coupon.allowed_user_id) {
+    if (!userId || String(coupon.allowed_user_id) !== String(userId)) {
+      return {
+        valid: false,
+        message: "Este cupón no es válido para tu cuenta",
+      };
+    }
+  }
+
   if (coupon.starts_at && now < new Date(coupon.starts_at)) {
     return { valid: false, message: "Cupón aún no está activo" };
   }
