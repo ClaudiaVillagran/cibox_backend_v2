@@ -1,3 +1,4 @@
+import mongoose from "mongoose";
 import Order from "../models/Order.js";
 import { getTransaction, webpayReturnUrl } from "../config/webpay.js";
 import { logger } from "../utils/logger.js";
@@ -103,10 +104,11 @@ export const commitWebpayTransaction = async ({ token }) => {
 
   // FIX: usar Order.findOneAndUpdate (Mongoose) en vez de Order.collection.*
   // Order.collection devuelve un doc crudo sin .save() → TypeError en el catch
+  // mongoose.trusted() necesario para que sanitizeFilter no castee el $in a string
   const locked = await Order.findOneAndUpdate(
     {
       "payment.token": token,
-      "payment.status": { $in: ["pending", "processing"] },
+      "payment.status": mongoose.trusted({ $in: ["pending", "processing"] }),
     },
     { $set: { "payment.status": "processing_commit" } },
     { new: true },
