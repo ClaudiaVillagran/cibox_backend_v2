@@ -6,6 +6,7 @@ import {
   notificationParamsSchema,
 } from "../validators/notificationValidators.js";
 import {
+  savePushToken,
   listMyNotifications,
   getUnreadCount,
   markAsRead,
@@ -17,6 +18,7 @@ const router = Router();
 
 router.use(protect);
 
+router.put("/push-token", savePushToken);
 router.get("/", validate({ query: listNotificationsSchema }), listMyNotifications);
 router.get("/unread-count", getUnreadCount);
 router.patch("/read-all", markAllAsRead);

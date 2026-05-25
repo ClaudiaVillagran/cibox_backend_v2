@@ -68,6 +68,9 @@ const userSchema = new mongoose.Schema(
       select: false,
     },
 
+    push_token: { type: String, default: null },
+    push_token_updated_at: { type: Date, default: null },
+
     is_active: { type: Boolean, default: true },
   },
   {

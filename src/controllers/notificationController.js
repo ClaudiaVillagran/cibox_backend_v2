@@ -1,11 +1,28 @@
 import { asyncHandler } from "../middlewares/errorHandler.js";
 import { Notification } from "../models/Notification.js";
+import { User } from "../models/User.js";
 import { NotFoundError } from "../utils/errors.js";
 import { logger } from "../utils/logger.js";
 
+export const savePushToken = asyncHandler(async (req, res) => {
+  const { push_token } = req.body;
+
+  // Validación básica del formato de Expo push token
+  if (push_token && !String(push_token).startsWith("ExponentPushToken[")) {
+    return res.status(400).json({ success: false, message: "Token de push inválido" });
+  }
+
+  await User.updateOne(
+    { _id: req.user.id },
+    { $set: { push_token: push_token || null, push_token_updated_at: new Date() } },
+  );
+
+  logger.debug({ userId: req.user.id }, "push_token guardado");
+  return res.status(200).json({ success: true });
+});
+
 export const listMyNotifications = asyncHandler(async (req, res) => {
   const userId = req.user.id;
-  console.log('user from notification',userId);
   const page = Math.max(1, Number(req.query.page) || 1);
   const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 20));
   const skip = (page - 1) * limit;
@@ -22,7 +39,6 @@ export const listMyNotifications = asyncHandler(async (req, res) => {
     Notification.countDocuments(filter),
     Notification.countDocuments({ user_id: userId, is_read: false }),
   ]);
-  console.log(items);
   return res.status(200).json({
     success: true,
     data: {

@@ -38,7 +38,6 @@ import deleteEmptyCategories from "./seed/deleteEmptyCategories .js";
 import missionRoutes from "./routes/missionRoutes.js";
 
 const app = express();
-console.log('prueba');
 app.set("trust proxy", 1);
 app.set("query parser", "simple");
 

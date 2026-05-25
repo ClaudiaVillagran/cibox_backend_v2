@@ -9,6 +9,7 @@ import {
 import { logger } from "../utils/logger.js";
 import { sendEmail } from "../services/emailService.js";
 import { VALID_TRANSITIONS } from "../utils/constants.js";
+import { createNotification } from "../utils/notification.js";
 
 import {
   createOrderFromCart as svcCreateFromCart,
@@ -20,6 +21,7 @@ import {
 import {
   retryPayment as svcRetryPayment,
 } from "../services/paymentService.js";
+import { sendPushToUser } from "../services/pushService.js";
 
 const sanitizeOrder = (order) => {
   if (!order) return null;
@@ -291,6 +293,37 @@ export const adminUpdateOrderStatus = asyncHandler(async (req, res) => {
       }
     } catch (err) {
       logger.warn({ err: err.message }, "no se pudo enviar email de cambio de estado");
+    }
+  }
+
+  // Notificación in-app + Push al usuario
+  if (order.user_id) {
+    const shortId = String(order._id).slice(-6).toUpperCase();
+    const notifMessages = {
+      paid:      { title: "✅ Pago confirmado",          body: `Tu orden #${shortId} fue pagada. ¡Estamos preparándola!` },
+      preparing: { title: "📦 Preparando tu pedido",    body: `Tu orden #${shortId} está siendo preparada.` },
+      shipped:   { title: "🚚 ¡Tu pedido va en camino!", body: `Tu orden #${shortId} fue despachada.${tracking_number ? ` Seguimiento: ${tracking_number}` : ""}` },
+      delivered: { title: "🏠 Pedido entregado",        body: `Tu orden #${shortId} fue entregada. ¡Gracias por comprar en CIBOX!` },
+      cancelled: { title: "❌ Orden cancelada",          body: `Tu orden #${shortId} fue cancelada.${note ? ` Motivo: ${note}` : ""}` },
+    };
+    const msg = notifMessages[status];
+    if (msg) {
+      // Guardar en BD (pantalla de notificaciones)
+      createNotification({
+        user_id: order.user_id,
+        type: "order_status_changed",
+        title: msg.title,
+        body: msg.body,
+        data: { orderId: String(order._id), status },
+      }).catch(() => {});
+
+      // Enviar push al dispositivo
+      sendPushToUser({
+        userId: order.user_id,
+        title: msg.title,
+        body: msg.body,
+        data: { orderId: String(order._id), status },
+      }).catch(() => {});
     }
   }
 
