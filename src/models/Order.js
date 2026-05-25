@@ -124,6 +124,17 @@ const orderSchema = new mongoose.Schema(
     notes: { type: String, default: null, trim: true },
     cancelled_at: { type: Date, default: null },
     cancellation_reason: { type: String, default: null, trim: true },
+    status_history: {
+      type: [
+        {
+          status: { type: String, enum: Object.values(ORDER_STATUS) },
+          changed_at: { type: Date, default: Date.now },
+          note: { type: String, default: null, trim: true },
+          _id: false,
+        },
+      ],
+      default: [],
+    },
   },
   {
     timestamps: { createdAt: "created_at", updatedAt: "updated_at" },

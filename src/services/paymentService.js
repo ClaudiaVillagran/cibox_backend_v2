@@ -101,57 +101,42 @@ export const createWebpayTransaction = async ({ order, platform }) => {
 export const commitWebpayTransaction = async ({ token }) => {
   if (!token) throw new BadRequestError("Token requerido");
 
-  const locked = await Order.collection.findOneAndUpdate(
+  // FIX: usar Order.findOneAndUpdate (Mongoose) en vez de Order.collection.*
+  // Order.collection devuelve un doc crudo sin .save() → TypeError en el catch
+  const locked = await Order.findOneAndUpdate(
     {
       "payment.token": token,
       "payment.status": { $in: ["pending", "processing"] },
     },
     { $set: { "payment.status": "processing_commit" } },
-    { returnDocument: "after" },
+    { new: true },
   );
 
-  const lockedDoc = locked?.value || locked;
-  if (!lockedDoc) {
-    const existing = await Order.findOne({ "payment.token": token });
-    if (!existing) throw new NotFoundError("Orden no encontrada para el token");
-    logger.info({ orderId: String(existing._id) }, "commit: idempotente");
-    return existing;
-  }
-
+  // Si no se pudo bloquear: ya fue procesada (idempotente)
   if (!locked) {
     const existing = await Order.findOne({ "payment.token": token });
     if (!existing) throw new NotFoundError("Orden no encontrada para el token");
-    logger.info({ orderId: String(existing._id) }, "commit: idempotente");
+    logger.info(
+      { orderId: String(existing._id), paymentStatus: existing.payment?.status },
+      "commit: idempotente — orden ya procesada",
+    );
     return existing;
   }
-
-  // if (!locked) {
-  //   // No pudo bloquear: ya fue confirmada o cancelada.
-  //   const existing = await Order.findOne({ "payment.token": token });
-  //   if (!existing) throw new NotFoundError("Orden no encontrada para el token");
-  //   logger.info(
-  //     {
-  //       orderId: String(existing._id),
-  //       paymentStatus: existing.payment?.status,
-  //       orderStatus: existing.status,
-  //     },
-  //     "commitWebpayTransaction: idempotente — ya procesada",
-  //   );
-  //   return existing;
-  // }
 
   let response;
   try {
     const tx = getTransaction();
     response = await tx.commit(token);
   } catch (err) {
-    // Liberar el lock como rejected si falla la llamada
-    locked.payment.status = PAYMENT_STATUS.REJECTED;
-    locked.payment.transaction_date = new Date();
-    await locked.save();
+    // Liberar el lock — usar updateOne porque si .save() falla aquí la orden
+    // queda atrapada en processing_commit sin posibilidad de reintento
+    await Order.updateOne(
+      { _id: locked._id },
+      { $set: { "payment.status": PAYMENT_STATUS.REJECTED, "payment.transaction_date": new Date() } },
+    );
     logger.error(
       { orderId: String(locked._id), err: err.message },
-      "Webpay commit falló",
+      "Webpay commit falló — lock liberado como rejected",
     );
     throw err;
   }
@@ -163,7 +148,7 @@ export const commitWebpayTransaction = async ({ token }) => {
   const responseAmount = Math.round(Number(response?.amount || 0));
   const amountMatches = responseAmount === expectedAmount;
 
-  // Persistir respuesta
+  // Persistir respuesta en el doc Mongoose (locked ya es documento Mongoose)
   locked.payment.authorization_code = response?.authorization_code || null;
   locked.payment.transaction_date = response?.transaction_date
     ? new Date(response.transaction_date)

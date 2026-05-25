@@ -80,3 +80,12 @@ export const retryPaymentSchema = {
     })
     .optional(),
 };
+
+export const adminUpdateStatusSchema = {
+  params: z.object({ id: objectId }),
+  body: z.object({
+    status: z.enum(["pending", "paid", "preparing", "shipped", "delivered", "cancelled", "refunded"]),
+    tracking_number: z.string().trim().max(100).optional().nullable(),
+    note: z.string().trim().max(300).optional().nullable(),
+  }),
+};

@@ -14,6 +14,8 @@ import {
   cancelMyOrder,
   retryPayment,
   adminCancelOrder,
+  adminUpdateOrderStatus,
+  adminListOrders,
 } from "../controllers/orderController.js";
 import {
   createFromCartSchema,
@@ -22,6 +24,7 @@ import {
   orderIdParamSchema,
   guestOrderLookupSchema,
   retryPaymentSchema,
+  adminUpdateStatusSchema,
 } from "../validators/orderValidators.js";
 
 
@@ -42,6 +45,26 @@ router.post(
 );
 
 router.get("/me", protect, getMyOrders);
+
+// ── Rutas admin (deben ir ANTES de /:id para evitar conflictos) ──────────────
+router.get("/admin", protect, requireAdmin, adminListOrders);
+
+router.post(
+  "/admin/:id/cancel",
+  protect,
+  requireAdmin,
+  validate(cancelOrderSchema),
+  adminCancelOrder
+);
+
+router.patch(
+  "/admin/:id/status",
+  protect,
+  requireAdmin,
+  validate(adminUpdateStatusSchema),
+  adminUpdateOrderStatus,
+);
+// ─────────────────────────────────────────────────────────────────────────────
 
 router.get(
   "/guest/:id",
@@ -69,14 +92,6 @@ router.post(
   optionalAuth,
   validate(retryPaymentSchema),
   retryPayment
-);
-
-router.post(
-  "/admin/:id/cancel",
-  protect,
-  requireAdmin,
-  validate(cancelOrderSchema),
-  adminCancelOrder
 );
 
 export default router;

@@ -8,6 +8,7 @@ import {
 } from "../utils/errors.js";
 import { logger } from "../utils/logger.js";
 import { sendEmail } from "../services/emailService.js";
+import { VALID_TRANSITIONS } from "../utils/constants.js";
 
 import {
   createOrderFromCart as svcCreateFromCart,
@@ -120,6 +121,13 @@ export const getMyOrders = asyncHandler(async (req, res) => {
 });
 
 export const getOrderById = asyncHandler(async (req, res) => {
+  // Admin puede ver cualquier orden sin verificar ownership
+  if (req.user?.role === "admin") {
+    const order = await Order.findById(req.params.id).select("-guest_token_hash").lean();
+    if (!order) throw new BadRequestError("Orden no encontrada");
+    return res.status(200).json({ success: true, data: order });
+  }
+
   const identity = getRequestIdentity(req);
   identity.guestToken = req.query?.token || req.body?.guestToken || null;
 
@@ -181,6 +189,36 @@ export const retryPayment = asyncHandler(async (req, res) => {
 
 /* ------------------------------- admin ----------------------------------- */
 
+export const adminListOrders = asyncHandler(async (req, res) => {
+  if (req.user?.role !== "admin") throw new ForbiddenError("Solo admin");
+
+  const page   = Math.max(1, parseInt(req.query.page)  || 1);
+  const limit  = Math.min(50, parseInt(req.query.limit) || 20);
+  const status = req.query.status || null;
+  const skip   = (page - 1) * limit;
+
+  const filter = {};
+  if (status) filter.status = status;
+
+  const [orders, total] = await Promise.all([
+    Order.find(filter)
+      .sort({ created_at: -1 })
+      .skip(skip)
+      .limit(limit)
+      .select("-guest_token_hash")
+      .lean(),
+    Order.countDocuments(filter),
+  ]);
+
+  return res.json({
+    success: true,
+    data: {
+      orders,
+      pagination: { page, limit, total, pages: Math.ceil(total / limit) },
+    },
+  });
+});
+
 export const adminCancelOrder = asyncHandler(async (req, res) => {
   if (req.user?.role !== "admin") throw new ForbiddenError("Solo admin");
 
@@ -189,6 +227,72 @@ export const adminCancelOrder = asyncHandler(async (req, res) => {
     reason: req.body?.reason,
     byAdmin: true,
   });
+
+  return res.status(200).json({ success: true, data: sanitizeOrder(order) });
+});
+
+export const adminUpdateOrderStatus = asyncHandler(async (req, res) => {
+  if (req.user?.role !== "admin") throw new ForbiddenError("Solo admin");
+
+  const { id } = req.params;
+  const { status, tracking_number, note } = req.body;
+
+  const order = await Order.findById(id);
+  if (!order) throw new BadRequestError("Orden no encontrada");
+
+  const validNext = VALID_TRANSITIONS[order.status] || [];
+  if (!validNext.includes(status)) {
+    throw new BadRequestError(
+      `Transición inválida: ${order.status} → ${status}. Permitidos: ${validNext.join(", ") || "ninguno"}`
+    );
+  }
+
+  order.status = status;
+
+  if (tracking_number) {
+    order.shipping.tracking_number = tracking_number;
+  }
+
+  if (status === "cancelled") {
+    order.cancelled_at = new Date();
+    order.cancellation_reason = note || "Cancelado por admin";
+  }
+
+  // Registrar en historial de estados
+  if (!Array.isArray(order.status_history)) order.status_history = [];
+  order.status_history.push({ status, changed_at: new Date(), note: note || null });
+  order.markModified("status_history");
+
+  await order.save();
+
+  // Email automático al cliente según el nuevo estado
+  const email = order.customer?.email;
+  if (email) {
+    try {
+      const messages = {
+        paid:      { subject: "Pago confirmado", body: "Tu pago fue confirmado. Estamos preparando tu pedido." },
+        preparing: { subject: "Preparando tu pedido", body: "Estamos preparando tu pedido. Pronto saldrá a despacho." },
+        shipped: {
+          subject: "Tu pedido está en camino 🚚",
+          body: `Tu pedido está en camino.${tracking_number ? ` Número de seguimiento: <strong>${tracking_number}</strong>` : ""}`,
+        },
+        delivered: { subject: "Pedido entregado ✅", body: "Tu pedido fue entregado. ¡Gracias por comprar en CIBOX!" },
+        cancelled: { subject: "Orden cancelada", body: `Tu orden fue cancelada.${note ? ` Motivo: ${note}` : ""}` },
+      };
+
+      const msg = messages[status];
+      if (msg) {
+        await sendEmail({
+          to: email,
+          subject: `${msg.subject} — Orden #${String(order._id).slice(-6).toUpperCase()}`,
+          text: msg.body.replace(/<[^>]+>/g, ""),
+          html: `<p>Hola ${order.customer.fullName || ""},</p><p>${msg.body}</p><p>Orden #${String(order._id).slice(-6).toUpperCase()}</p>`,
+        });
+      }
+    } catch (err) {
+      logger.warn({ err: err.message }, "no se pudo enviar email de cambio de estado");
+    }
+  }
 
   return res.status(200).json({ success: true, data: sanitizeOrder(order) });
 });
