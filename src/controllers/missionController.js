@@ -129,16 +129,23 @@ export const claimReward = asyncHandler(async (req, res) => {
   const expiresAt = new Date();
   expiresAt.setDate(expiresAt.getDate() + 30);
 
-  const coupon = await Coupon.create({
-    code,
-    discount_type: mission.discount_type,
-    discount_value: mission.discount_value,
-    max_uses: 1,
-    max_uses_per_user: 1,
-    expires_at: expiresAt,
-    is_active: true,
-      allowed_user_id: userId,
-  });
+  // Upsert idempotente: si el cupón ya existe (reintento), lo reutiliza en vez de lanzar 409
+  const coupon = await Coupon.findOneAndUpdate(
+    { code },
+    {
+      $setOnInsert: {
+        code,
+        discount_type: mission.discount_type,
+        discount_value: mission.discount_value,
+        max_uses: 1,
+        max_uses_per_user: 1,
+        expires_at: expiresAt,
+        is_active: true,
+        allowed_user_id: userId,
+      },
+    },
+    { upsert: true, new: true },
+  );
 
   um.reward_claimed = true;
   um.reward_code = code;
