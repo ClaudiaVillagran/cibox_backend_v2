@@ -33,7 +33,7 @@ export const getMyDocuments = asyncHandler(async (req, res) => {
   const limit = Number(req.query.limit) || 20;
   const skip = (page - 1) * limit;
 
-  const filter = { order_id: { $in: orderIds } };
+  const filter = { order_id: mongoose.trusted({ $in: orderIds }) };
   const [items, total] = await Promise.all([
     TaxDocument.find(filter).sort({ created_at: -1 }).skip(skip).limit(limit).lean(),
     TaxDocument.countDocuments(filter),

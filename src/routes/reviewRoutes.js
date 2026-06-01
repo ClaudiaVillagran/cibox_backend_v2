@@ -13,6 +13,7 @@ import {
 } from "../validators/reviewValidators.js";
 import {
   listProductReviews,
+  getMyReview,
   createReview,
   updateReview,
   deleteReview,
@@ -29,6 +30,9 @@ router.get(
   validate({ params: productReviewsParamsSchema, query: productReviewsQuerySchema }),
   listProductReviews
 );
+
+// Mi reseña para un producto (requiere auth)
+router.get("/product/:productId/me", protect, getMyReview);
 
 // Crear (requiere email verificado)
 router.post(

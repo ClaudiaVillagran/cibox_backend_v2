@@ -9,6 +9,8 @@ import {
 } from "../utils/errors.js";
 import { PAYMENT_STATUS, ORDER_STATUS } from "../utils/constants.js";
 import { finalizePaidOrder } from "./orderService.js";
+import { createNotification } from "../utils/notification.js";
+import { sendPushToUser } from "./pushService.js";
 
 const buildBuyOrder = (orderId) => {
   const shortId = String(orderId).slice(-10);
@@ -195,6 +197,27 @@ export const commitWebpayTransaction = async ({ token }) => {
     { orderId: String(refreshed._id), total: refreshed.total },
     "Webpay commit aprobado y orden finalizada",
   );
+
+  // Notificación in-app + push al pagar (solo usuarios autenticados)
+  if (refreshed.user_id) {
+    const shortId = String(refreshed._id).slice(-6).toUpperCase();
+    const title = "✅ Pago confirmado";
+    const body  = `Tu orden #${shortId} fue pagada. ¡Estamos preparándola!`;
+    createNotification({
+      user_id: refreshed.user_id,
+      type: "order_status_changed",
+      title,
+      body,
+      data: { orderId: String(refreshed._id), status: "paid" },
+    }).catch(() => {});
+    sendPushToUser({
+      userId: refreshed.user_id,
+      title,
+      body,
+      data: { orderId: String(refreshed._id), status: "paid" },
+    }).catch(() => {});
+  }
+
   return refreshed;
 };
 

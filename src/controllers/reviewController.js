@@ -1,3 +1,4 @@
+import mongoose from "mongoose";
 import { asyncHandler } from "../middlewares/errorHandler.js";
 import { Review } from "../models/Review.js";
 import { Product } from "../models/Product.js";
@@ -115,7 +116,7 @@ export const createReview = asyncHandler(async (req, res) => {
   const purchaseFilter = {
     user_id: userId,
     "items.product_id": productId,
-    status: { $in: PAID_STATUSES },
+    status: mongoose.trusted({ $in: PAID_STATUSES }),
   };
   if (orderId) purchaseFilter._id = orderId;
 
@@ -288,6 +289,21 @@ export const markHelpful = asyncHandler(async (req, res) => {
     success: true,
     data: { review },
     message: "Marcada como útil",
+  });
+});
+
+export const getMyReview = asyncHandler(async (req, res) => {
+  const { productId } = req.params;
+  const review = await Review.findOne({
+    product_id: productId,
+    user_id: req.user.id,
+  }).lean();
+
+  if (!review) throw new NotFoundError("No tienes una reseña para este producto");
+
+  return res.status(200).json({
+    success: true,
+    data: { review },
   });
 });
 

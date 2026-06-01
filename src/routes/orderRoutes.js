@@ -39,7 +39,7 @@ router.post(
 
 router.post(
   "/from-custom-box",
-  optionalAuth,
+  protect,
   validate(createFromCustomBoxSchema),
   createFromCustomBox
 );

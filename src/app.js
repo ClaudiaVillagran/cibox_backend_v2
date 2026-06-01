@@ -103,7 +103,7 @@ app.get("/failed", (req, res) => {
 
 app.use(notFoundHandler);
 app.use(errorHandler);
-// seedProducts()
+//seedProducts()
 //  deleteProducts();
 // deleteEmptyCategories()
 export default app;

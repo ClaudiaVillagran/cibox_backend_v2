@@ -139,7 +139,7 @@ export const getDashboardMetrics = asyncHandler(async (req, res) => {
       { $match: { status: { $in: PAID_STATUSES } } },
       { $group: { _id: null, total_sales: { $sum: "$total" }, count: { $sum: 1 } } },
     ]),
-    Order.countDocuments({ status: { $in: PAID_STATUSES } }),
+    Order.countDocuments({ status: mongoose.trusted({ $in: PAID_STATUSES }) }),
     User.countDocuments({ is_active: true }),
     Product.countDocuments({ is_active: true }),
     Vendor.countDocuments({ is_active: true }),
