@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import { normalizeText } from "../utils/text.js";
 
 const pricingTierSchema = new mongoose.Schema(
   {
@@ -51,9 +52,29 @@ const productSchema = new mongoose.Schema(
 
     description: { type: String, required: true, trim: true },
 
+    // Categoría primaria (para display y backward-compat)
     category: {
       id: { type: String, required: true, trim: true },
       name: { type: String, required: true, trim: true },
+    },
+
+    // Todas las categorías asignadas explícitamente (mínimo 1)
+    categories: {
+      type: [
+        {
+          id: { type: String, required: true, trim: true },
+          name: { type: String, required: true, trim: true },
+          _id: false,
+        },
+      ],
+      default: [],
+    },
+
+    // IDs de todas las categorías (hijos + padres resueltos) — usado para filtrado
+    category_ids: {
+      type: [String],
+      default: [],
+      index: true,
     },
 
     pricing: {
@@ -98,6 +119,9 @@ const productSchema = new mongoose.Schema(
     sku: { type: String, trim: true, default: "" },
     brand: { type: String, trim: true, default: "" },
 
+    // Precio de referencia en supermercado tradicional (para mostrar ahorro)
+    compare_price: { type: Number, default: 0, min: 0 },
+
     weight: {
       value: { type: Number, min: 0, default: 0 },
       unit: { type: String, trim: true, default: "g" },
@@ -116,6 +140,12 @@ const productSchema = new mongoose.Schema(
 );
 
 productSchema.pre("save", function () {
+  // Normalizar search_name: sin tildes, sin mayúsculas
+  if (this.name) {
+    this.search_name = normalizeText(this.name);
+  }
+
+  // Calcular precio mínimo
   if (Array.isArray(this.pricing?.tiers) && this.pricing.tiers.length > 0) {
     const prices = this.pricing.tiers.map((t) => Number(t.price || 0));
     this.pricing.min_price = Math.min(...prices);
@@ -144,7 +174,8 @@ productSchema.pre("findOneAndUpdate", function () {
   }
 });
 
-productSchema.index({ is_active: 1, "category.id": 1 });
+productSchema.index({ is_active: 1, "category.id": 1 });       // backward-compat
+productSchema.index({ is_active: 1, category_ids: 1 });          // filtrado multi-cat
 productSchema.index({ is_active: 1, "vendor.id": 1 });
 productSchema.index({ search_name: "text" });
 productSchema.index({ is_active: 1, "pricing.min_price": 1 });

@@ -73,6 +73,56 @@ export const optionalAuth = async (req, res, next) => {
   }
 };
 
+/**
+ * strictOptionalAuth
+ *
+ * Igual que optionalAuth EXCEPTO que si viene un token, lo valida estrictamente:
+ * - Sin token           → continúa como invitado (guest checkout OK)
+ * - Token válido        → setea req.user
+ * - Token expirado      → retorna 401 → el interceptor de axios lo refresca y reintenta
+ *
+ * Usar en rutas que admiten invitados pero no deben silenciar tokens expirados
+ * de usuarios autenticados (ej: POST /orders/from-cart).
+ */
+export const strictOptionalAuth = async (req, res, next) => {
+  try {
+    const token = extractToken(req);
+    if (!token) return next(); // invitado genuino → OK
+
+    // Hay token → validar estrictamente (igual que protect)
+    let decoded;
+    try {
+      decoded = jwt.verify(token, env.JWT_SECRET);
+    } catch {
+      return next(new UnauthorizedError("Token inválido o expirado"));
+    }
+
+    const user = await User.findById(decoded.id)
+      .select("_id email role is_active email_verified password_changed_at")
+      .lean();
+
+    if (!user) return next(new UnauthorizedError("Usuario no encontrado"));
+    if (user.is_active === false) return next(new ForbiddenError("Usuario desactivado"));
+
+    if (user.password_changed_at) {
+      const tokenIssuedAt = decoded.iat * 1000;
+      if (tokenIssuedAt < user.password_changed_at.getTime()) {
+        return next(new UnauthorizedError("Sesión expirada, vuelve a iniciar sesión"));
+      }
+    }
+
+    req.user = {
+      id: String(user._id),
+      email: user.email,
+      role: user.role,
+      email_verified: user.email_verified,
+    };
+    next();
+  } catch (err) {
+    next(err);
+  }
+};
+
 export const requireEmailVerified = (req, res, next) => {
   if (!req.user?.email_verified) {
     return next(new ForbiddenError("Email no verificado"));

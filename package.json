@@ -9,7 +9,9 @@
     "start": "node server.js",
     "lint": "eslint src",
     "test": "node --test test/",
-      "migrate:wp-images": "node src/scripts/migrateWpImagesToCloudinary.js"
+      "migrate:wp-images": "node src/scripts/migrateWpImagesToCloudinary.js",
+      "migrate:categories": "node scripts/migrateProductCategories.js",
+      "migrate:search": "node scripts/migrateSearchNames.js"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.650.0",

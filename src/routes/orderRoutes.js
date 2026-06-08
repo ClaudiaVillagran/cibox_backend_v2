@@ -1,6 +1,6 @@
 import { Router } from "express";
 
-import { optionalAuth, protect } from "../middlewares/authMiddleware.js";
+import { optionalAuth, protect, strictOptionalAuth } from "../middlewares/authMiddleware.js";
 import { requireAdmin } from "../middlewares/roleMiddleware.js";
 import { validate } from "../middlewares/validate.js";
 import { guestOrderLimiter } from "../middlewares/rateLimiters.js";
@@ -32,7 +32,7 @@ const router = Router();
 
 router.post(
   "/from-cart",
-  optionalAuth,
+  strictOptionalAuth,   // invitados OK, pero token expirado → 401 para refresh
   validate(createFromCartSchema),
   createFromCart
 );

@@ -9,8 +9,95 @@ import { logger } from "../utils/logger.js";
 import { ROLES } from "../utils/constants.js";
 
 import Product from "../models/Product.js";
+import Category from "../models/Category.js";
 import Vendor from "../models/Vendor.js";
 import { User } from "../models/User.js";
+import { normalizeText } from "../utils/text.js";
+
+/**
+ * Dado un array de IDs de categorías (strings o ObjectIds),
+ * devuelve un Set con esos IDs más todos sus ancestros (padres, abuelos, etc.).
+ * Hace queries iterativas hasta que no haya más parents que subir.
+ */
+const resolveAllCategoryIds = async (categoryIds) => {
+  const allIds = new Set(categoryIds.map(String));
+  let toResolve = [...allIds];
+
+  while (toResolve.length > 0) {
+    const cats = await Category.find(
+      { _id: mongoose.trusted({ $in: toResolve }) },
+    ).select("_id parent_id").lean();
+
+    toResolve = [];
+    for (const cat of cats) {
+      if (cat.parent_id) {
+        const parentStr = String(cat.parent_id);
+        if (!allIds.has(parentStr)) {
+          allIds.add(parentStr);
+          toResolve.push(cat.parent_id);
+        }
+      }
+    }
+  }
+
+  return Array.from(allIds);
+};
+
+/**
+ * Recibe una lista de category IDs (los asignados explícitamente),
+ * sube el árbol de padres y devuelve:
+ *
+ * - categories  → TODAS las categorías de la cadena: hijo + padres
+ *                 Ejemplo: [{ Aceites y grasas }, { Despensa }]
+ * - category    → la categoría hoja (la más específica, backward-compat)
+ * - category_ids → IDs de todas (para filtrado rápido)
+ *
+ * Ejemplo resultado para un producto en "Aceites y grasas" (hijo de "Despensa"):
+ *   categories:   [ { id: "...", name: "Aceites y grasas" }, { id: "...", name: "Despensa" } ]
+ *   category:     { id: "...", name: "Aceites y grasas" }
+ *   category_ids: [ "id-aceites", "id-despensa" ]
+ */
+const buildCategoriesPayload = async (categoryIds) => {
+  if (!Array.isArray(categoryIds) || categoryIds.length === 0) {
+    throw new BadRequestError("Debes asignar al menos una categoría al producto");
+  }
+
+  // Validar que las categorías explícitas existen
+  const found = await Category.find(
+    { _id: mongoose.trusted({ $in: categoryIds }), is_active: true },
+  ).select("_id name parent_id").lean();
+
+  if (found.length !== categoryIds.length) {
+    throw new BadRequestError(
+      "Una o más categorías no existen o están inactivas",
+    );
+  }
+
+  // Resolver todos los IDs (explícitos + ancestros)
+  const allIds = await resolveAllCategoryIds(found.map((c) => c._id));
+
+  // Cargar los datos de TODAS las categorías de la cadena (para tener sus nombres)
+  const allCats = await Category.find(
+    { _id: mongoose.trusted({ $in: allIds }) },
+  ).select("_id name parent_id").lean();
+
+  // Ordenar: primero las hojas (sin hijos en el conjunto), luego los padres
+  // Estrategia simple: los que tienen parent_id van primero (son más específicos)
+  const allCatMap = new Map(allCats.map((c) => [String(c._id), c]));
+  const childIds  = new Set(found.map((c) => String(c._id)));
+
+  // Las hojas (asignadas explícitamente) van primero, luego sus ancestros
+  const ordered = [
+    ...allCats.filter((c) => childIds.has(String(c._id))),
+    ...allCats.filter((c) => !childIds.has(String(c._id))),
+  ];
+
+  const categories   = ordered.map((c) => ({ id: String(c._id), name: c.name }));
+  const category     = categories[0]; // la más específica, backward-compat
+  const category_ids = allIds;
+
+  return { categories, category, category_ids };
+};
 
 // Whitelists explícitas server-side (defensa en profundidad)
 const VENDOR_UPDATE_FIELDS = new Set([
@@ -18,11 +105,14 @@ const VENDOR_UPDATE_FIELDS = new Set([
   "description",
   "pricing",
   "category",
+  "categories",
+  "category_ids",
   "images",
   "thumbnail",
   "stock",
   "sku",
   "brand",
+  "compare_price",
   "weight",
   "dimensions",
   "box_items",
@@ -85,7 +175,16 @@ const buildProductFilters = (q) => {
     and.push({ is_active: q.is_active });
   }
 
-  if (q.category) and.push({ "category.id": q.category });
+  // Filtra por category_ids (incluye hijos y padres resueltos)
+  // Mantiene fallback a "category.id" para productos legacy sin category_ids
+  if (q.category) {
+    and.push({
+      $or: [
+        { category_ids: q.category },
+        { "category.id": q.category },
+      ],
+    });
+  }
   if (q.vendor) and.push({ "vendor.id": q.vendor });
   if (q.product_type) and.push({ product_type: q.product_type });
 
@@ -105,18 +204,24 @@ const buildProductFilters = (q) => {
     }
   }
   if (q.search) {
-    const term = String(q.search).trim();
+    const raw  = String(q.search).trim();
+    if (raw) {
+      // Buscar con el término normalizado (sin tildes, sin mayúsculas)
+      // contra search_name (ya normalizado al guardar)
+      const normalized = normalizeText(raw);
+      const normRegex  = new RegExp(escapeRegex(normalized), "i");
 
-    if (term) {
-      const regex = new RegExp(escapeRegex(term), "i");
+      // También buscar con el término original (case-insensitive)
+      // contra campos no normalizados como brand y category.name
+      const rawRegex = new RegExp(escapeRegex(raw), "i");
 
       and.push({
         $or: [
-          { name: regex },
-          { search_name: regex },
-          { description: regex },
-          { brand: regex },
-          { "category.name": regex },
+          { search_name: normRegex },   // campo normalizado → búsqueda sin tildes
+          { name: rawRegex },           // fallback por si search_name no está actualizado
+          { brand: rawRegex },
+          { "category.name": rawRegex },
+          { description: rawRegex },
         ],
       });
     }
@@ -196,19 +301,28 @@ export const createProduct = asyncHandler(async (req, res) => {
     await validateBoxItemsServer(req.body.box_items || []);
   }
 
-  const search_name = String(req.body.name || "")
-    .trim()
-    .toLowerCase();
+  const search_name = normalizeText(req.body.name || "");
+
+  // Resolver categorías — acepta array de IDs o una sola categoría legacy
+  const rawCategoryIds =
+    Array.isArray(req.body.category_ids) && req.body.category_ids.length
+      ? req.body.category_ids
+      : req.body.category?.id
+        ? [req.body.category.id]
+        : [];
+
+  const catPayload = await buildCategoriesPayload(rawCategoryIds);
 
   const doc = await Product.create({
     ...req.body,
     product_type: productType,
     search_name,
     vendor,
+    ...catPayload,          // category, categories, category_ids
   });
 
   logger.info(
-    { product_id: String(doc._id), vendor_id: vendor.id },
+    { product_id: String(doc._id), vendor_id: vendor.id, category_ids: catPayload.category_ids },
     "product created",
   );
   res
@@ -239,7 +353,20 @@ export const updateProduct = asyncHandler(async (req, res) => {
   const update = pickFields(req.body, allowed);
 
   if (update.name) {
-    update.search_name = String(update.name).trim().toLowerCase();
+    update.search_name = normalizeText(update.name);
+  }
+
+  // Si vienen categorías nuevas, recalcular todo el árbol
+  const rawCategoryIds =
+    Array.isArray(req.body.category_ids) && req.body.category_ids.length
+      ? req.body.category_ids
+      : null;
+
+  if (rawCategoryIds) {
+    const catPayload = await buildCategoriesPayload(rawCategoryIds);
+    update.category     = catPayload.category;
+    update.categories   = catPayload.categories;
+    update.category_ids = catPayload.category_ids;
   }
 
   const finalType = update.product_type || product.product_type;
